@@ -4,6 +4,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.datavec.api.io.filters.BalancedPathFilter;
 import org.datavec.api.io.labels.ParentPathLabelGenerator;
+import org.datavec.api.split.CollectionInputSplit;
 import org.datavec.api.split.FileSplit;
 import org.datavec.api.split.InputSplit;
 import org.datavec.image.loader.BaseImageLoader;
@@ -36,6 +37,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Stream;
@@ -62,7 +64,7 @@ public class TrainModelApp {
 
     @SneakyThrows
     public static void main(String[] args) {
-        File trainDataZipFile = UrlUtil.loadFile(new URL(TRAIN_DATA_URL), Paths.get(WORK_FOLDER, "data.zip"));
+        File trainDataZipFile = UrlUtil.loadToFile(new URL(TRAIN_DATA_URL), Paths.get(WORK_FOLDER, "data.zip"));
         File trainDataFolder = Paths.get(WORK_FOLDER, "trainData").toFile();
         if (!trainDataFolder.exists()) {
             ZipUtil.unzip(trainDataZipFile, trainDataFolder);
@@ -72,47 +74,71 @@ public class TrainModelApp {
         modelsFolder.mkdirs();
 
         ModelTrainInfo startModelTrainInfo = Optional.ofNullable(getLatestModel(modelsFolder.listFiles()))
-                .orElseGet(() -> ModelTrainInfo.builder().epoch(0).index(0).build());
+                .orElseGet(() -> ModelTrainInfo.builder().epoch(0).iteration(-1).build());
 
         ComputationGraph vgg16Transfer = Optional.ofNullable(startModelTrainInfo.getFile())
                 .map(TrainModelApp::loadModel)
                 .orElseGet(TrainModelApp::prepareModel);
+
+        vgg16Transfer.setListeners(new ScoreIterationListener(5));
 
         log.info("Model summary " + startModelTrainInfo + System.lineSeparator() + vgg16Transfer.summary());
 
         FileSplit train = new FileSplit(new File(trainDataFolder, "train_both"), NativeImageLoader.ALLOWED_FORMATS, RANDOM);
         FileSplit test = new FileSplit(new File(trainDataFolder, "test_both"), NativeImageLoader.ALLOWED_FORMATS, RANDOM);
 
-        InputSplit[] sample = train.sample(PATH_FILTER, TRAIN_SIZE, 100 - TRAIN_SIZE);
-        DataSetIterator trainIterator = getDataSetIterator(sample[0]);
-        DataSetIterator devIterator = getDataSetIterator(sample[1]);
+        InputSplit[] samples = train.sample(PATH_FILTER, TRAIN_SIZE, 100 - TRAIN_SIZE);
+        InputSplit trainSample = samples[0];
+
+        DataSetIterator trainIterator = getDataSetIterator(trainSample);
+        DataSetIterator devIterator = getDataSetIterator(samples[1]);
 
         DataSetIterator testIterator = getDataSetIterator(test.sample(PATH_FILTER, 1, 0)[0]);
 
-        for (int epoch = startModelTrainInfo.getEpoch(); epoch < EPOCH; epoch++) {
-            int i = 0;
+        boolean firstIteration = true;
 
-            while (trainIterator.hasNext()) {
-                DataSet trained = trainIterator.next();
+        while (vgg16Transfer.getEpochCount() < EPOCH) {
+            DataSetIterator dataSetIterator = trainIterator;
 
-                ModelTrainInfo modelTrainInfo = ModelTrainInfo.builder().epoch(epoch).index(i).build();
-
-//                if (modelTrainInfo.compareTo(startModelTrainInfo) == 1) {
-                    vgg16Transfer.fit(trained);
-
-                    if (i % SAVING_INTERVAL == 0 && i != 0) {
-                        String modelName = modelTrainInfo.generateFileName();
-                        ModelSerializer.writeModel(vgg16Transfer, new File(modelsFolder, modelName), false);
-                        log.info("Model saved {}", modelName);
-                        evalOn(vgg16Transfer, devIterator, epoch, i);
-                    }
-//                }
-
-                i++;
+            if (firstIteration && vgg16Transfer.getIterationCount() > 0) {
+                dataSetIterator = getDataSetIterator(new CollectionInputSplit(Arrays.copyOfRange(
+                        trainSample.locations(),
+                        (vgg16Transfer.getIterationCount() + 1) * BATCH_SIZE,
+                        (int) trainSample.length()
+                )));
             }
 
+            while (dataSetIterator.hasNext()) {
+                DataSet trained = dataSetIterator.next();
+
+                vgg16Transfer.fit(trained);
+
+                if (vgg16Transfer.getIterationCount() % SAVING_INTERVAL == 0 && vgg16Transfer.getIterationCount() != 0) {
+                    saveModel(vgg16Transfer,
+                            modelsFolder,
+                            ModelTrainInfo.builder()
+                                    .epoch(vgg16Transfer.getEpochCount())
+                                    .iteration(vgg16Transfer.getIterationCount())
+                                    .build()
+                                    .generateFileName());
+                }
+            }
+
+            firstIteration = false;
+
             trainIterator.reset();
-            evalOn(vgg16Transfer, testIterator, epoch, i);
+            evalOn(vgg16Transfer, testIterator);
+
+            vgg16Transfer.incrementEpochCount();
+            vgg16Transfer.getConfiguration().setIterationCount(0);
+
+            saveModel(vgg16Transfer,
+                    modelsFolder,
+                    ModelTrainInfo.builder()
+                            .epoch(vgg16Transfer.getEpochCount())
+                            .iteration(vgg16Transfer.getIterationCount())
+                            .build()
+                            .generateFileName());
         }
     }
 
@@ -141,7 +167,7 @@ public class TrainModelApp {
                 .seed(SEED)
                 .build();
 
-        ComputationGraph vgg16Transfer = new TransferLearning.GraphBuilder(preTrainedNet)
+        return new TransferLearning.GraphBuilder(preTrainedNet)
                 .fineTuneConfiguration(fineTuneConf)
                 .setFeatureExtractor(FREEZE_UNTIL_LAYER)
                 .removeVertexKeepConnections("predictions")
@@ -151,16 +177,19 @@ public class TrainModelApp {
                                 .weightInit(WeightInit.XAVIER)
                                 .activation(Activation.SOFTMAX).build(), FREEZE_UNTIL_LAYER)
                 .build();
-        vgg16Transfer.setListeners(new ScoreIterationListener(5));
-
-        return vgg16Transfer;
     }
 
-    private static void evalOn(ComputationGraph vgg16Transfer, DataSetIterator testIterator, int iEpoch, int i) {
-        log.info("Evaluate model at epoch {} iteration {} ....", iEpoch, i);
+    private static void evalOn(ComputationGraph vgg16Transfer, DataSetIterator testIterator) {
+        log.info("Evaluate model at epoch {} iteration {} ....", vgg16Transfer.getEpochCount(), vgg16Transfer.getIterationCount());
         Evaluation eval = vgg16Transfer.evaluate(testIterator);
         log.info(eval.stats());
         testIterator.reset();
+    }
+
+    @SneakyThrows
+    private static void saveModel(ComputationGraph computationGraph, File modelsFolder, String modelFileName) {
+        ModelSerializer.writeModel(computationGraph, new File(modelsFolder, modelFileName), false);
+        log.info("Model saved {}", modelFileName);
     }
 
     private static DataSetIterator getDataSetIterator(InputSplit sample) throws IOException {

@@ -16,13 +16,13 @@ import java.util.regex.Pattern;
 @Builder
 public class ModelTrainInfo implements Comparable<ModelTrainInfo> {
 
-    public static final Pattern NAME_PATTERN = Pattern.compile("epoch_(?<epoch>\\d+)_index_(?<index>\\d+)\\.zip");
+    public static final Pattern NAME_PATTERN = Pattern.compile("epoch_(?<epoch>\\d+)_(index|iteration)_(?<iteration>\\d+)\\.zip");
 
     public static final Comparator<ModelTrainInfo> COMPARATOR = Comparator.comparingInt(ModelTrainInfo::getEpoch)
-            .thenComparingInt(ModelTrainInfo::getIndex);
+            .thenComparingInt(ModelTrainInfo::getIteration);
 
     private int epoch;
-    private int index;
+    private int iteration;
     private File file;
 
     public static ModelTrainInfo fromFile(File file) {
@@ -34,7 +34,7 @@ public class ModelTrainInfo implements Comparable<ModelTrainInfo> {
 
         return ModelTrainInfo.builder()
                 .epoch(Integer.valueOf(matcher.group("epoch")))
-                .index(Integer.valueOf(matcher.group("index")))
+                .iteration(Integer.valueOf(matcher.group("iteration")))
                 .file(file)
                 .build();
     }
@@ -45,6 +45,6 @@ public class ModelTrainInfo implements Comparable<ModelTrainInfo> {
     }
 
     public String generateFileName() {
-        return "epoch_" + epoch + "_index_" + index + ".zip";
+        return "epoch_" + epoch + "_iteration_" + iteration + ".zip";
     }
 }
