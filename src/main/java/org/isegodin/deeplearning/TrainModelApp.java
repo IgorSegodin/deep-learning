@@ -22,6 +22,7 @@ import org.deeplearning4j.util.ModelSerializer;
 import org.deeplearning4j.zoo.PretrainedType;
 import org.deeplearning4j.zoo.ZooModel;
 import org.deeplearning4j.zoo.model.VGG16;
+import org.isegodin.deeplearning.data.ModelTrainInfo;
 import org.isegodin.deeplearning.util.UrlUtil;
 import org.isegodin.deeplearning.util.ZipUtil;
 import org.nd4j.evaluation.classification.Evaluation;
@@ -35,10 +36,9 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import java.util.stream.Stream;
 
 /**
  * @author isegodin
@@ -71,21 +71,14 @@ public class TrainModelApp {
         File modelsFolder = Paths.get(WORK_FOLDER, "models").toFile();
         modelsFolder.mkdirs();
 
-        ComputationGraph vgg16Transfer;
+        ModelTrainInfo startModelTrainInfo = Optional.ofNullable(getLatestModel(modelsFolder.listFiles()))
+                .orElseGet(() -> ModelTrainInfo.builder().epoch(0).index(0).build());
 
-        List<File> models = Arrays.asList(Optional.ofNullable(modelsFolder.listFiles()).orElse(new File[0]));
-        if (models.isEmpty()) {
-            vgg16Transfer = prepareModel();
-        } else {
-            // todo sort models
-            vgg16Transfer = ModelSerializer.restoreComputationGraph(models.get(0));
-        }
-        System.out.println(vgg16Transfer.summary());
+        ComputationGraph vgg16Transfer = Optional.ofNullable(startModelTrainInfo.getFile())
+                .map(TrainModelApp::loadModel)
+                .orElseGet(TrainModelApp::prepareModel);
 
-        // TODO continue
-        if (true) {
-            return;
-        }
+        log.info("Model summary " + startModelTrainInfo + System.lineSeparator() + vgg16Transfer.summary());
 
         FileSplit train = new FileSplit(new File(trainDataFolder, "train_both"), NativeImageLoader.ALLOWED_FORMATS, RANDOM);
         FileSplit test = new FileSplit(new File(trainDataFolder, "test_both"), NativeImageLoader.ALLOWED_FORMATS, RANDOM);
@@ -95,23 +88,44 @@ public class TrainModelApp {
         DataSetIterator devIterator = getDataSetIterator(sample[1]);
 
         DataSetIterator testIterator = getDataSetIterator(test.sample(PATH_FILTER, 1, 0)[0]);
-        int iEpoch = 0;
-        int i = 0;
-        while (iEpoch < EPOCH) {
+
+        for (int epoch = startModelTrainInfo.getEpoch(); epoch < EPOCH; epoch++) {
+            int i = 0;
+
             while (trainIterator.hasNext()) {
                 DataSet trained = trainIterator.next();
-                vgg16Transfer.fit(trained);
-                if (i % SAVING_INTERVAL == 0 && i != 0) {
-                    ModelSerializer.writeModel(vgg16Transfer, new File(modelsFolder, i + "_epoch_" + iEpoch + ".zip"), false);
-                    evalOn(vgg16Transfer, devIterator, i);
-                }
+
+                ModelTrainInfo modelTrainInfo = ModelTrainInfo.builder().epoch(epoch).index(i).build();
+
+//                if (modelTrainInfo.compareTo(startModelTrainInfo) == 1) {
+                    vgg16Transfer.fit(trained);
+
+                    if (i % SAVING_INTERVAL == 0 && i != 0) {
+                        String modelName = modelTrainInfo.generateFileName();
+                        ModelSerializer.writeModel(vgg16Transfer, new File(modelsFolder, modelName), false);
+                        log.info("Model saved {}", modelName);
+                        evalOn(vgg16Transfer, devIterator, epoch, i);
+                    }
+//                }
+
                 i++;
             }
-            trainIterator.reset();
-            iEpoch++;
 
-            evalOn(vgg16Transfer, testIterator, iEpoch);
+            trainIterator.reset();
+            evalOn(vgg16Transfer, testIterator, epoch, i);
         }
+    }
+
+    private static ModelTrainInfo getLatestModel(File[] models) {
+        return Stream.of(Optional.ofNullable(models).orElse(new File[0]))
+                .map(ModelTrainInfo::fromFile)
+                .max(ModelTrainInfo.COMPARATOR)
+                .orElse(null);
+    }
+
+    @SneakyThrows
+    private static ComputationGraph loadModel(File model) {
+        return ModelSerializer.restoreComputationGraph(model);
     }
 
     @SneakyThrows
@@ -142,12 +156,11 @@ public class TrainModelApp {
         return vgg16Transfer;
     }
 
-    private static void evalOn(ComputationGraph vgg16Transfer, DataSetIterator testIterator, int iEpoch) throws IOException {
-        log.info("Evaluate model at iteration {} ....", iEpoch);
+    private static void evalOn(ComputationGraph vgg16Transfer, DataSetIterator testIterator, int iEpoch, int i) {
+        log.info("Evaluate model at epoch {} iteration {} ....", iEpoch, i);
         Evaluation eval = vgg16Transfer.evaluate(testIterator);
         log.info(eval.stats());
         testIterator.reset();
-
     }
 
     private static DataSetIterator getDataSetIterator(InputSplit sample) throws IOException {
