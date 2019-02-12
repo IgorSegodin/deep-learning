@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hello</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+</head>
+<body>
+<div>
+    <div>Select file or specify URL</div>
+    <br/>
+
+    <div><input id="imageInput" name="file" type="file" accept="image/*" onchange="onFileSelect(event)"></div>
+    <div>Or</div>
+    <div>
+        <button onclick="setUrl()">Set url</button>
+    </div>
+    <div id="predictionResult"></div>
+    <div><img id="imagePreview" src="#" width="200"/></div>
+
+    <script>
+        function onFileSelect(e) {
+            const file = e.target.files[0];
+
+            let formData = new FormData();
+            formData.append("file", file);
+
+            predictRequest({
+                url: "/file/upload",
+                data: formData
+            });
+
+            setPreview(URL.createObjectURL(file));
+        }
+
+        function setUrl() {
+            const url = prompt("Specify URL to image");
+
+            predictRequest({
+                url: "/file/url",
+                data: url
+            });
+
+            setPreview(url);
+        }
+
+        function predictRequest({url, data}) {
+            document.getElementById("predictionResult").innerText = "...";
+
+            fetch(url, {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json",
+                },
+                body: data
+            }).then(response => {
+                return response.json();
+            }).then(json => {
+                document.getElementById("predictionResult").innerText = json.data;
+            });
+        }
+
+        function setPreview(srcObj) {
+            const imagePreviewEl = document.getElementById("imagePreview");
+            imagePreviewEl.src = srcObj;
+        }
+    </script>
+</div>
+</body>
+</html>
