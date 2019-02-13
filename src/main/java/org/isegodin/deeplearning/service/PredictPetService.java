@@ -4,24 +4,18 @@ import lombok.SneakyThrows;
 import org.datavec.image.loader.NativeImageLoader;
 import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.util.ModelSerializer;
-import org.isegodin.deeplearning.data.ModelTrainInfo;
 import org.isegodin.deeplearning.data.dict.PetType;
 import org.isegodin.deeplearning.util.UrlUtil;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
 import org.nd4j.linalg.dataset.api.preprocessor.VGG16ImagePreProcessor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.Optional;
-import java.util.stream.Stream;
 
 /**
  * @author isegodin
@@ -31,22 +25,14 @@ public class PredictPetService {
 
     private static final Double THRESHOLD = 0.75;
 
-    @Value("${deep-learning.modelsFolderPath}")
-    private String modelsFolderPath;
+    private volatile ComputationGraph computationGraph;
 
-    private ComputationGraph computationGraph;
-
-    @PostConstruct
     @SneakyThrows
-    public void postConstruct() {
-        ModelTrainInfo modelInfo = Stream.of(Optional.ofNullable(new File(modelsFolderPath).listFiles()).orElse(new File[0]))
-                .map(ModelTrainInfo::fromFile)
-                .max(ModelTrainInfo.COMPARATOR)
-                .orElseThrow(() -> new RuntimeException("Can not load model"));
+    public void updateModel(byte[] model) {
+        ComputationGraph newGraph = ModelSerializer.restoreComputationGraph(new ByteArrayInputStream(model));
+        newGraph.init();
 
-
-        computationGraph = ModelSerializer.restoreComputationGraph(modelInfo.getFile());
-        computationGraph.init();
+        this.computationGraph = newGraph;
     }
 
     public PetType predictFromBytes(byte[] bytes) {

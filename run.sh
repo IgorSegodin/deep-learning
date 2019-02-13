@@ -1,0 +1,1 @@
+java -jar build/libs/deep-learning-0.0.1.jar

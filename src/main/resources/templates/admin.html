@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hello</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <script type="application/javascript" src="https://bitwiseshiftleft.github.io/sjcl/sjcl.js"></script>
+</head>
+<body>
+<div>
+    <div>Test</div>
+    <br/>
+    <div><input id="accessInput" type="password"/></div>
+    <div><input name="file" type="file" onchange="onFileSelect(event)"></div>
+
+    <script>
+        function onFileSelect(e) {
+            const file = e.target.files[0];
+
+            let formData = new FormData();
+            formData.append("file", file);
+
+            uploadFile({
+                url: "/admin/upload",
+                data: formData
+            });
+        }
+
+        function uploadFile({url, data}) {
+            fetch(url, {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json",
+                    "access": sha256(document.getElementById("accessInput").value)
+                },
+                body: data
+            }).then(response => {
+                return response.json();
+            }).then(json => {
+                console.log(json);
+            });
+        }
+
+        function sha256(text) {
+            return sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(text));
+        }
+    </script>
+</div>
+</body>
+</html>
