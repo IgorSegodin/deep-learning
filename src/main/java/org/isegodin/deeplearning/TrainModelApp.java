@@ -48,7 +48,6 @@ import java.util.stream.Stream;
 @Slf4j
 public class TrainModelApp {
 
-    private static final String WORK_FOLDER = "/Users/isegodin/GitHub/deep-learning/temp";
     private static final String TRAIN_DATA_URL = "https://dl.dropboxusercontent.com/s/tqnp49apphpzb40/dataTraining.zip?dl=0";
 
     private static final int SEED = 12345;
@@ -64,6 +63,12 @@ public class TrainModelApp {
 
     @SneakyThrows
     public static void main(String[] args) {
+        String WORK_FOLDER = args[0];
+        log.info("Work folder: {}", WORK_FOLDER);
+        if (WORK_FOLDER == null || WORK_FOLDER.trim().isEmpty()) {
+            throw new RuntimeException("Specify work folder");
+        }
+
         File trainDataZipFile = UrlUtil.loadToFile(new URL(TRAIN_DATA_URL), Paths.get(WORK_FOLDER, "data.zip"));
         File trainDataFolder = Paths.get(WORK_FOLDER, "trainData").toFile();
         if (!trainDataFolder.exists()) {

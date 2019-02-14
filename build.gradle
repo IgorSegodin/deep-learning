@@ -1,6 +1,6 @@
 buildscript {
     ext {
-        springBootVersion = '2.1.2.RELEASE'
+        platformType = 'linux-x86_64' // macosx-x86_64
     }
     repositories {
         mavenCentral()
@@ -25,10 +25,37 @@ repositories {
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.deeplearning4j:deeplearning4j-core:1.0.0-beta3'
-    implementation 'org.deeplearning4j:deeplearning4j-zoo:1.0.0-beta3'
-    implementation 'org.nd4j:nd4j-native-platform:1.0.0-beta3'
-    implementation 'org.nd4j:nd4j-api:1.0.0-beta3'
+
+    implementation ("org.deeplearning4j:deeplearning4j-core:${deeplearning4jVersion}") {
+        exclude group: "org.bytedeco.javacpp-presets", module: "hdf5-platform"
+        exclude group: "org.bytedeco.javacpp-presets", module: "leptonica-platform"
+        exclude group: "org.bytedeco.javacpp-presets", module: "opencv-platform"
+    }
+
+    implementation "org.deeplearning4j:deeplearning4j-zoo:${deeplearning4jVersion}"
+
+    implementation "org.nd4j:nd4j-api:${deeplearning4jVersion}"
+
+    implementation "org.nd4j:nd4j-native:${deeplearning4jVersion}"
+    implementation "org.nd4j:nd4j-native:${deeplearning4jVersion}:${platformType}"
+
+    implementation "org.bytedeco.javacpp-presets:hdf5:${cpp_hdf5_version}"
+    implementation "org.bytedeco.javacpp-presets:hdf5:${cpp_hdf5_version}:${platformType}"
+
+    implementation "org.bytedeco.javacpp-presets:leptonica:${cpp_leptonica_version}"
+    implementation "org.bytedeco.javacpp-presets:leptonica:${cpp_leptonica_version}:${platformType}"
+
+    implementation "org.bytedeco.javacpp-presets:opencv:${cpp_opencv_version}"
+    implementation "org.bytedeco.javacpp-presets:opencv:${cpp_opencv_version}:${platformType}"
+
+    implementation "org.bytedeco.javacpp-presets:mkl:${cpp_mkl_version}"
+    implementation "org.bytedeco.javacpp-presets:mkl:${cpp_mkl_version}:${platformType}"
+
+    implementation "org.bytedeco.javacpp-presets:mkl-dnn:${cpp_mkl_dnn_version}"
+    implementation "org.bytedeco.javacpp-presets:mkl-dnn:${cpp_mkl_dnn_version}:${platformType}"
+
+    implementation "org.bytedeco.javacpp-presets:openblas:${cpp_openblas_version}"
+    implementation "org.bytedeco.javacpp-presets:openblas:${cpp_openblas_version}:${platformType}"
 
     runtimeOnly 'org.springframework.boot:spring-boot-devtools'
     compileOnly 'org.projectlombok:lombok'
