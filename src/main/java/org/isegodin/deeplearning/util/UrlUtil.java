@@ -1,18 +1,22 @@
 package org.isegodin.deeplearning.util;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import lombok.SneakyThrows;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
 import java.nio.file.Path;
 
 /**
  * @author isegodin
+ * @deprecated Should not upload data in memory, no need for this util
  */
+@Deprecated
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class UrlUtil {
 
     @SneakyThrows
@@ -37,14 +41,6 @@ public class UrlUtil {
 
     @SneakyThrows
     private static void load(URL dataUrl, OutputStream outputStream) {
-        try (InputStream is = dataUrl.openStream()) {
-            try (OutputStream os = outputStream) {
-                int read;
-                byte[] buffer = new byte[1024];
-                while ((read = is.read(buffer)) != -1) {
-                    os.write(buffer, 0, read);
-                }
-            }
-        }
+        StreamUtil.readWrite(dataUrl.openStream(), outputStream);
     }
 }

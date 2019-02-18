@@ -1,5 +1,7 @@
 package org.isegodin.deeplearning.util;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import lombok.SneakyThrows;
 
 import java.nio.charset.StandardCharsets;
@@ -8,6 +10,7 @@ import java.security.MessageDigest;
 /**
  * @author isegodin
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class HashUtil {
 
     @SneakyThrows

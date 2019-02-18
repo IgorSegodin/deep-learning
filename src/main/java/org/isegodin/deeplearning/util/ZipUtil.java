@@ -1,5 +1,7 @@
 package org.isegodin.deeplearning.util;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import lombok.SneakyThrows;
 
 import java.io.File;
@@ -12,6 +14,7 @@ import java.util.zip.ZipInputStream;
 /**
  * @author isegodin
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ZipUtil {
 
     @SneakyThrows
@@ -31,11 +34,7 @@ public class ZipUtil {
                     entryFile.mkdir();
                 } else {
                     try (OutputStream os = new FileOutputStream(entryFile)) {
-                        byte[] buffer = new byte[1024];
-                        int read;
-                        while ((read = zis.read(buffer)) != -1) {
-                            os.write(buffer, 0, read);
-                        }
+                        StreamUtil.readWriteUnsafe(zis, os);
                     }
                 }
             }

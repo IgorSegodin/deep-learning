@@ -14,6 +14,13 @@ import lombok.NoArgsConstructor;
 @Builder
 public class ResponseWrapper<T> {
 
+    @Builder.Default
+    private Status status = Status.OK;
+
     private T data;
+
+    public enum Status {
+        OK, ERROR;
+    }
 
 }
